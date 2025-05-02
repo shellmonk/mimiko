@@ -1,0 +1,9 @@
+[package]
+name = "mimiko"
+version = "0.1.0"
+edition = "2024"
+authors = ["Srdjan Djordjevic <root@shellmonk.io>"]
+license = "MIT"
+
+[dependencies]
+regex-syntax = "0.8.5"

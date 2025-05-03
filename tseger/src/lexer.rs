@@ -1,3 +1,6 @@
+// TODO: Remove this when module is ready
+#![allow(dead_code)]
+
 use std::iter::Peekable;
 
 /*
@@ -19,6 +22,7 @@ use std::iter::Peekable;
 * - \x{FFF0,FFFF}   Unicode scalar value ranges
 * -
 */
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum RegexAtom {
     Literal(char),                        // ascii - abc123; unicode scalar values - \xFFFF

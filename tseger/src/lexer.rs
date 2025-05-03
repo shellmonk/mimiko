@@ -111,12 +111,9 @@ pub fn lex(rx: &str) -> Vec<(RegexAtom, Position)> {
                             },
                         )),
                         'x' => {
-                            tokens.push(lex_char_classes(&mut iter))
-                            //todo!("Unicode characters and ranges not yet implemented")
+                            todo!("Unicode characters and ranges not yet implemented")
                         }
-                        'p' => {
-                            todo!("Character classes not yet implemented")
-                        }
+                        'p' => tokens.push(lex_char_classes(&mut iter)),
                         _ => todo!("This needs to be handled, unknown character after slash"),
                     }
                 }
@@ -134,10 +131,10 @@ where
 {
     // TODO: This looks like shit, improve early return
     match iter.peek() {
-        None => todo!("Handle error when \\x is the last char"),
+        None => todo!("Handle error when \\p is the last char"),
         Some((i, c)) => {
             if *c != '{' {
-                todo!("Invalid token '{}' after \\x at position: {}", c, i);
+                todo!("Invalid token '{}' after \\p at position: {}", c, i);
             }
         }
     }
@@ -149,7 +146,7 @@ where
     let mut end = 0;
 
     match n {
-        None => todo!("String ending error handling after \\x should not yet implemented"),
+        None => todo!("String ending error handling after \\p should not yet implemented"),
         Some((i, _)) => {
             start = i;
             while let Some(m) = iter.next() {
@@ -184,7 +181,7 @@ mod tests {
 
     #[test]
     fn char_classes_happy_path() {
-        let rx = r#"\x{cls1}\x{cls2}"#;
+        let rx = r#"\p{cls1}\p{cls2}"#;
 
         let lexed = lex(rx);
         println!("{:?}, {:?}", rx, lexed);

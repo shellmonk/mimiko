@@ -1,7 +1,5 @@
-use crate::xeger::RegexToken::Literal;
-
-#[derive(Debug, Clone, Copy)]
-enum RegexToken {
+#[derive(Debug, Clone)]
+pub enum RegexToken {
     Literal(char), // regular character
     Number(i64),   // 1, 7, 69, 420
     LParen,        // (
@@ -19,15 +17,19 @@ enum RegexToken {
     OpSh,          // $
     Range,         // -
     Comma,         // ,
-    EOF
+    Var(String),   // ${variable}
+    Whitespace,    //
+    NewLine,
+    Tab,
+    EOF,
 }
 
-fn lex(rx: &str) -> Vec<RegexToken> {
+pub fn lex(rx: &str) -> Vec<RegexToken> {
     let mut iter = rx.chars().into_iter().peekable();
     let mut tokens = Vec::new();
 
     loop {
-        let c= iter.next();
+        let c = iter.next();
         match c {
             Some('(') => tokens.push(RegexToken::LParen),
             Some(')') => tokens.push(RegexToken::RParen),
@@ -49,7 +51,7 @@ fn lex(rx: &str) -> Vec<RegexToken> {
                     tokens.push(RegexToken::Number(tmp_num.parse::<i64>().unwrap()));
                     tmp_num.clear();
                 }
-            },
+            }
             Some('}') => tokens.push(RegexToken::RBrace),
             Some('|') => tokens.push(RegexToken::OpOr),
             Some('*') => tokens.push(RegexToken::OpStar),
@@ -59,6 +61,9 @@ fn lex(rx: &str) -> Vec<RegexToken> {
             Some('\\') => tokens.push(RegexToken::OpEscapeChar),
             Some('$') => tokens.push(RegexToken::OpSh),
             Some('-') => tokens.push(RegexToken::Range),
+            Some('\t') => tokens.push(RegexToken::Tab),
+            Some('\n') => tokens.push(RegexToken::NewLine),
+            Some(' ') => tokens.push(RegexToken::Whitespace),
             Some(',') => {
                 tokens.push(RegexToken::Comma);
 
@@ -78,13 +83,12 @@ fn lex(rx: &str) -> Vec<RegexToken> {
                     tokens.push(RegexToken::Number(tmp_num.parse::<i64>().unwrap()));
                     tmp_num.clear();
                 }
-            },
+            }
             None => {
                 tokens.push(RegexToken::EOF);
                 break;
-            },
-            c if c.unwrap().is_alphanumeric() => tokens.push(Literal(c.unwrap())),
-            c if c.unwrap().is_whitespace() => continue,
+            }
+            c if c.unwrap().is_alphanumeric() => tokens.push(RegexToken::Literal(c.unwrap())),
             _ => panic!("Unexpected character '{}'", c.unwrap()),
         }
     }

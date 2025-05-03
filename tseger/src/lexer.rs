@@ -1,3 +1,5 @@
+use std::iter::Peekable;
+
 /*
 * Regex atoms:
 *
@@ -109,7 +111,8 @@ pub fn lex(rx: &str) -> Vec<(RegexAtom, Position)> {
                             },
                         )),
                         'x' => {
-                            todo!("Unicode characters and ranges not yet implemented")
+                            tokens.push(lex_char_classes(&mut iter))
+                            //todo!("Unicode characters and ranges not yet implemented")
                         }
                         'p' => {
                             todo!("Character classes not yet implemented")
@@ -125,9 +128,74 @@ pub fn lex(rx: &str) -> Vec<(RegexAtom, Position)> {
     tokens
 }
 
+fn lex_char_classes<I>(iter: &mut Peekable<I>) -> (RegexAtom, Position)
+where
+    I: Iterator<Item = (usize, char)>,
+{
+    // TODO: This looks like shit, improve early return
+    match iter.peek() {
+        None => todo!("Handle error when \\x is the last char"),
+        Some((i, c)) => {
+            if *c != '{' {
+                todo!("Invalid token '{}' after \\x at position: {}", c, i);
+            }
+        }
+    }
+
+    let mut n = iter.next();
+
+    let mut class_name = String::new();
+    let mut start = 0;
+    let mut end = 0;
+
+    match n {
+        None => todo!("String ending error handling after \\x should not yet implemented"),
+        Some((i, _)) => {
+            start = i;
+            while let Some(m) = iter.next() {
+                if m.1 == '}' {
+                    end = m.0;
+                    return (
+                        RegexAtom::CharClass(class_name),
+                        Position {
+                            start: start,
+                            end: end,
+                        },
+                    );
+                } else {
+                    class_name.push(m.1)
+                }
+            }
+        }
+    }
+
+    (
+        RegexAtom::CharClass(class_name),
+        Position {
+            start: start,
+            end: end,
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn char_classes_happy_path() {
+        let rx = r#"\x{cls1}\x{cls2}"#;
+
+        let lexed = lex(rx);
+        println!("{:?}, {:?}", rx, lexed);
+
+        let mut v = lexed.iter();
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::CharClass("cls1".to_string())
+        );
+    }
+
     #[test]
     fn test_lex_one_symbol_quantifiers() {
         let lexed = lex(".*?+^|");
@@ -143,7 +211,8 @@ mod tests {
 
     #[test]
     fn test_escape_characters() {
-        let lexed = lex("\\(\\)\\[\\]\\{\\}\\.\\*\\?\\+\\^\\|\\\\\\n\\r\\t");
+        let rx = r#"\(\)\[\]\{\}\.\*\?\+\^\|\\\n\r\t"#;
+        let lexed = lex(rx);
         let mut v = lexed.iter();
 
         assert_eq!(v.next().unwrap().0, RegexAtom::Literal('('));

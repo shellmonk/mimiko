@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["kernel", "tseger"]
+members = ["kernel", "oracle", "tseger"]
 
 [workspace.package]
 authors = ["Srdjan Djordjevic <root@shellmonk.io>"]

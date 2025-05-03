@@ -130,43 +130,45 @@ mod tests {
     use super::*;
     #[test]
     fn test_lex_one_symbol_quantifiers() {
-        let v = lex(".*?+^|");
+        let lexed = lex(".*?+^|");
+        let mut v = lexed.iter();
 
-        assert_eq!(v.get(0).unwrap().0, RegexAtom::QuantWildcard);
-        assert_eq!(v.get(1).unwrap().0, RegexAtom::QuantKleene);
-        assert_eq!(v.get(2).unwrap().0, RegexAtom::QuantOptional);
-        assert_eq!(v.get(3).unwrap().0, RegexAtom::QuantPlus);
-        assert_eq!(v.get(4).unwrap().0, RegexAtom::Negation);
-        assert_eq!(v.get(5).unwrap().0, RegexAtom::Or);
+        assert_eq!(v.next().unwrap().0, RegexAtom::QuantWildcard);
+        assert_eq!(v.next().unwrap().0, RegexAtom::QuantKleene);
+        assert_eq!(v.next().unwrap().0, RegexAtom::QuantOptional);
+        assert_eq!(v.next().unwrap().0, RegexAtom::QuantPlus);
+        assert_eq!(v.next().unwrap().0, RegexAtom::Negation);
+        assert_eq!(v.next().unwrap().0, RegexAtom::Or);
     }
 
     #[test]
     fn test_escape_characters() {
-        let v = lex("\\(\\)\\[\\]\\{\\}\\.\\*\\?\\+\\^\\|\\\\\\n\\r\\t");
+        let lexed = lex("\\(\\)\\[\\]\\{\\}\\.\\*\\?\\+\\^\\|\\\\\\n\\r\\t");
+        let mut v = lexed.iter();
 
-        assert_eq!(v.get(0).unwrap().0, RegexAtom::Literal('('));
-        assert_eq!(v.get(1).unwrap().0, RegexAtom::Literal(')'));
-        assert_eq!(v.get(2).unwrap().0, RegexAtom::Literal('['));
-        assert_eq!(v.get(3).unwrap().0, RegexAtom::Literal(']'));
-        assert_eq!(v.get(4).unwrap().0, RegexAtom::Literal('{'));
-        assert_eq!(v.get(5).unwrap().0, RegexAtom::Literal('}'));
-        assert_eq!(v.get(6).unwrap().0, RegexAtom::Literal('.'));
-        assert_eq!(v.get(7).unwrap().0, RegexAtom::Literal('*'));
-        assert_eq!(v.get(8).unwrap().0, RegexAtom::Literal('?'));
-        assert_eq!(v.get(9).unwrap().0, RegexAtom::Literal('+'));
-        assert_eq!(v.get(10).unwrap().0, RegexAtom::Literal('^'));
-        assert_eq!(v.get(11).unwrap().0, RegexAtom::Literal('|'));
-        assert_eq!(v.get(12).unwrap().0, RegexAtom::Literal('\\'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('('));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal(')'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('['));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal(']'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('{'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('}'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('.'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('*'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('?'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('+'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('^'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('|'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('\\'));
         assert_eq!(
-            v.get(13).unwrap().0,
+            v.next().unwrap().0,
             RegexAtom::Whitespace(WhitespaceKind::NewLine)
         );
         assert_eq!(
-            v.get(14).unwrap().0,
+            v.next().unwrap().0,
             RegexAtom::Whitespace(WhitespaceKind::CR)
         );
         assert_eq!(
-            v.get(15).unwrap().0,
+            v.next().unwrap().0,
             RegexAtom::Whitespace(WhitespaceKind::Tab)
         );
     }

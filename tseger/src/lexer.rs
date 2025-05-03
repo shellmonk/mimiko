@@ -1,99 +1,126 @@
-#[derive(Debug, Clone)]
-pub enum RegexToken {
-    Literal(char), // regular character
-    Number(i64),   // 1, 7, 69, 420
-    LParen,        // (
-    RParen,        // )
-    LBrace,        // {
-    RBrace,        // }
-    LBracket,      // [
-    RBracket,      // ]
-    OpOr,          // |
-    OpStar,        // *
-    OpPlus,        // +
-    OpQMark,       // ?
-    OpWildcard,    // .
-    OpEscapeChar,  // \
-    OpSh,          // $
-    Range,         // -
-    Comma,         // ,
-    Var(String),   // ${variable}
-    Whitespace,    //
-    NewLine,
-    Tab,
+/*
+* Regex atoms:
+*
+* - abc123          literals
+* - [a-zA-Z0-9]     ranges
+* - .               {1,1} wildcard quantifier
+* - ?               {0,1} optional quantifier
+* - *               {0,} Kleene star quantifier
+* - +               {1,} plus quantifier
+* - |               logical OR
+* - a{,5}|((b|c)*)  groupings and nested expressions
+* - \* \\           escaping special characters
+* - \t \r \n        special whitespace characters
+* - ^               negation
+* - \p{digits}      character classes (TBD) (digits, emojis, uppercase_ascii, cyrilic, etc.)
+* - \xFFFF          Unicode scalar values support
+* - \x{FFF0,FFFF}   Unicode scalar value ranges
+* -
+*/
+#[derive(Debug, PartialEq, Eq)]
+pub enum RegexAtom {
+    Literal(char),                        // ascii - abc123; unicode scalar values - \xFFFF
+    Range(char, char),                    // ascii - [a-zA-Z0-9]; unicode ranges - \x{FFF0,FFFF}
+    QuantWildcard,                        // . {1,1}
+    QuantOptional,                        // ? {0,1}
+    QuantKleene,                          // * {0,}
+    QuantPlus,                            // + {1,}
+    Or,                                   // | logical OR
+    LParen,                               // (
+    RParen,                               // )
+    Repetition(Option<u32>, Option<u32>), // {69,420}
+    Whitespace(WhitespaceKind),           // \t \r \n
+    Negation,                             // ^
+    CharClass(String),                    // \p{digits}
     EOF,
 }
 
-pub fn lex(rx: &str) -> Vec<RegexToken> {
-    let mut iter = rx.chars().into_iter().peekable();
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum WhitespaceKind {
+    NewLine,
+    Tab,
+    CR,
+}
+
+#[derive(Debug)]
+pub struct Position {
+    start: usize,
+    end: usize,
+}
+
+pub struct Lexer {}
+
+pub fn lex(rx: &str) -> Vec<(RegexAtom, Position)> {
     let mut tokens = Vec::new();
 
-    loop {
-        let c = iter.next();
+    let mut iter = rx.chars().enumerate().into_iter().peekable();
+
+    let mut in_range = false;
+    let mut in_char_class = false;
+    let mut in_repetition = false;
+
+    while let Some((i, c)) = iter.next() {
         match c {
-            Some('(') => tokens.push(RegexToken::LParen),
-            Some(')') => tokens.push(RegexToken::RParen),
-            Some('{') => {
-                tokens.push(RegexToken::LBrace);
-                let mut tmp_num = String::new();
-
-                if iter.peek().unwrap().is_ascii_digit() {
-                    while let Some(n) = iter.peek() {
-                        if n.is_ascii_digit() {
-                            tmp_num.push(iter.next().unwrap());
-                        } else {
-                            break;
+            '(' => tokens.push((RegexAtom::LParen, Position { start: i, end: i })),
+            ')' => tokens.push((RegexAtom::RParen, Position { start: i, end: i })),
+            '.' => tokens.push((RegexAtom::QuantWildcard, Position { start: i, end: i })),
+            '*' => tokens.push((RegexAtom::QuantKleene, Position { start: i, end: i })),
+            '?' => tokens.push((RegexAtom::QuantOptional, Position { start: i, end: i })),
+            '+' => tokens.push((RegexAtom::QuantPlus, Position { start: i, end: i })),
+            '^' => tokens.push((RegexAtom::Negation, Position { start: i, end: i })),
+            '|' => tokens.push((RegexAtom::Or, Position { start: i, end: i })),
+            '\\' => match iter.next() {
+                None => todo!("This needs to be handled, unescaped slash at the end of the regex"),
+                Some(following) => {
+                    let fc = following.1;
+                    match fc {
+                        fc if vec![
+                            '(', ')', '[', ']', '{', '}', '.', '*', '?', '+', '^', '|', '\\',
+                        ]
+                        .contains(&fc) =>
+                        {
+                            tokens.push((
+                                RegexAtom::Literal(fc),
+                                Position {
+                                    start: i,
+                                    end: i + 1,
+                                },
+                            ))
                         }
+                        'n' => tokens.push((
+                            RegexAtom::Whitespace(WhitespaceKind::NewLine),
+                            Position {
+                                start: i,
+                                end: i + 1,
+                            },
+                        )),
+                        'r' => tokens.push((
+                            RegexAtom::Whitespace(WhitespaceKind::CR),
+                            Position {
+                                start: i,
+                                end: i + 1,
+                            },
+                        )),
+                        't' => tokens.push((
+                            RegexAtom::Whitespace(WhitespaceKind::Tab),
+                            Position {
+                                start: i,
+                                end: i + 1,
+                            },
+                        )),
+                        'x' => {
+                            todo!("Unicode characters and ranges not yet implemented")
+                        }
+                        'p' => {
+                            todo!("Character classes not yet implemented")
+                        }
+                        _ => todo!("This needs to be handled, unknown character after slash"),
                     }
                 }
-
-                if !tmp_num.is_empty() {
-                    tokens.push(RegexToken::Number(tmp_num.parse::<i64>().unwrap()));
-                    tmp_num.clear();
-                }
-            }
-            Some('}') => tokens.push(RegexToken::RBrace),
-            Some('|') => tokens.push(RegexToken::OpOr),
-            Some('*') => tokens.push(RegexToken::OpStar),
-            Some('+') => tokens.push(RegexToken::OpPlus),
-            Some('?') => tokens.push(RegexToken::OpQMark),
-            Some('.') => tokens.push(RegexToken::OpWildcard),
-            Some('\\') => tokens.push(RegexToken::OpEscapeChar),
-            Some('$') => tokens.push(RegexToken::OpSh),
-            Some('-') => tokens.push(RegexToken::Range),
-            Some('\t') => tokens.push(RegexToken::Tab),
-            Some('\n') => tokens.push(RegexToken::NewLine),
-            Some(' ') => tokens.push(RegexToken::Whitespace),
-            Some(',') => {
-                tokens.push(RegexToken::Comma);
-
-                let mut tmp_num = String::new();
-
-                if iter.peek().unwrap().is_ascii_digit() {
-                    while let Some(n) = iter.peek() {
-                        if n.is_ascii_digit() {
-                            tmp_num.push(iter.next().unwrap());
-                        } else {
-                            break;
-                        }
-                    }
-                }
-
-                if !tmp_num.is_empty() {
-                    tokens.push(RegexToken::Number(tmp_num.parse::<i64>().unwrap()));
-                    tmp_num.clear();
-                }
-            }
-            None => {
-                tokens.push(RegexToken::EOF);
-                break;
-            }
-            c if c.unwrap().is_alphanumeric() => tokens.push(RegexToken::Literal(c.unwrap())),
-            _ => panic!("Unexpected character '{}'", c.unwrap()),
+            },
+            _ => todo!("Case {} at position {} not covered yet", c, i),
         }
     }
-
-    println!("{:?}", tokens);
 
     tokens
 }
@@ -102,8 +129,45 @@ pub fn lex(rx: &str) -> Vec<RegexToken> {
 mod tests {
     use super::*;
     #[test]
-    fn test_lex() {
-        let v = lex("a|(b.x?){5,20}?asdf.,.,,,...12315552138");
-        println!("{:?}", v);
+    fn test_lex_one_symbol_quantifiers() {
+        let v = lex(".*?+^|");
+
+        assert_eq!(v.get(0).unwrap().0, RegexAtom::QuantWildcard);
+        assert_eq!(v.get(1).unwrap().0, RegexAtom::QuantKleene);
+        assert_eq!(v.get(2).unwrap().0, RegexAtom::QuantOptional);
+        assert_eq!(v.get(3).unwrap().0, RegexAtom::QuantPlus);
+        assert_eq!(v.get(4).unwrap().0, RegexAtom::Negation);
+        assert_eq!(v.get(5).unwrap().0, RegexAtom::Or);
+    }
+
+    #[test]
+    fn test_escape_characters() {
+        let v = lex("\\(\\)\\[\\]\\{\\}\\.\\*\\?\\+\\^\\|\\\\\\n\\r\\t");
+
+        assert_eq!(v.get(0).unwrap().0, RegexAtom::Literal('('));
+        assert_eq!(v.get(1).unwrap().0, RegexAtom::Literal(')'));
+        assert_eq!(v.get(2).unwrap().0, RegexAtom::Literal('['));
+        assert_eq!(v.get(3).unwrap().0, RegexAtom::Literal(']'));
+        assert_eq!(v.get(4).unwrap().0, RegexAtom::Literal('{'));
+        assert_eq!(v.get(5).unwrap().0, RegexAtom::Literal('}'));
+        assert_eq!(v.get(6).unwrap().0, RegexAtom::Literal('.'));
+        assert_eq!(v.get(7).unwrap().0, RegexAtom::Literal('*'));
+        assert_eq!(v.get(8).unwrap().0, RegexAtom::Literal('?'));
+        assert_eq!(v.get(9).unwrap().0, RegexAtom::Literal('+'));
+        assert_eq!(v.get(10).unwrap().0, RegexAtom::Literal('^'));
+        assert_eq!(v.get(11).unwrap().0, RegexAtom::Literal('|'));
+        assert_eq!(v.get(12).unwrap().0, RegexAtom::Literal('\\'));
+        assert_eq!(
+            v.get(13).unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::NewLine)
+        );
+        assert_eq!(
+            v.get(14).unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::CR)
+        );
+        assert_eq!(
+            v.get(15).unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::Tab)
+        );
     }
 }

@@ -1,6 +1,6 @@
-use crate::lexer::RegexToken;
+use crate::lexer::RegexAtom;
 
-pub fn parse(tokens: Vec<RegexToken>) -> AST {
+pub fn parse(tokens: Vec<RegexAtom>) -> AST {
     AST::new()
 }
 

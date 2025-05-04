@@ -114,9 +114,8 @@ pub fn lex(rx: &str) -> Vec<(RegexAtom, Position)> {
                                 end: i + 1,
                             },
                         )),
-                        'x' => {
-                            todo!("Unicode characters and ranges not yet implemented")
-                        }
+                        'x' => tokens.push(lex_unicode(&mut iter)),
+
                         'p' => tokens.push(lex_char_classes(&mut iter)),
                         _ => todo!("This needs to be handled, unknown character after slash"),
                     }
@@ -127,6 +126,73 @@ pub fn lex(rx: &str) -> Vec<(RegexAtom, Position)> {
     }
 
     tokens
+}
+
+fn lex_unicode<I>(iter: &mut Peekable<I>) -> (RegexAtom, Position)
+where
+    I: Iterator<Item = (usize, char)>,
+{
+    // TODO: Refactor this, it really looks like shit
+    match iter.peek() {
+        None => todo!("Handle error when \\x is the last char"),
+        Some((i, c)) => {
+            if !c.is_ascii_hexdigit() && (*c != '{') {
+                todo!("Invalid token '{}' after \\x at position: {}", c, i);
+            }
+
+            if c.is_ascii_hexdigit() {
+                return lex_unicode_char(iter);
+            } else {
+                return lex_unicode_range(iter);
+            }
+        }
+    }
+}
+
+fn lex_unicode_char<I>(iter: &mut Peekable<I>) -> (RegexAtom, Position)
+where
+    I: Iterator<Item = (usize, char)>,
+{
+    let mut uchr = String::new();
+    let start: usize;
+    let mut end: usize = 0;
+
+    match iter.peek() {
+        None => todo!("Unexpected end while parsing unicode character"),
+        Some((i, _)) => start = *i - 2,
+    }
+
+    while let Some((i, c)) = iter.next_if(|&(_, c)| c.is_ascii_hexdigit()) {
+        uchr.push(c);
+        end = i;
+    }
+
+    (
+        RegexAtom::Literal(
+            char::from_u32(u32::from_str_radix(uchr.as_str(), 16).unwrap()).unwrap(),
+        ),
+        Position {
+            start: start,
+            end: end,
+        },
+    )
+}
+
+fn lex_unicode_range<I>(iter: &mut Peekable<I>) -> (RegexAtom, Position)
+where
+    I: Iterator<Item = (usize, char)>,
+{
+    let mut start = 0;
+    let mut end = 0;
+
+    let mut range = String::new();
+
+    while let Some((i, c)) = iter.next() {}
+
+    (
+        RegexAtom::Range('\u{21A9}', '\u{21FF}'),
+        Position { start: 0, end: 0 },
+    )
 }
 
 fn lex_char_classes<I>(iter: &mut Peekable<I>) -> (RegexAtom, Position)
@@ -143,7 +209,7 @@ where
         }
     }
 
-    let mut n = iter.next();
+    let n = iter.next();
 
     let mut class_name = String::new();
     let mut start = 0;
@@ -184,11 +250,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn unicode_char_happy_path() {
+        let rx = r#"\x21A9\x21AA\x21AB"#;
+
+        let lexed = lex(rx);
+
+        let mut v = lexed.iter();
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('\u{21A9}'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('\u{21AA}'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('\u{21AB}'));
+    }
+
+    #[test]
     fn char_classes_happy_path() {
         let rx = r#"\p{cls1}\p{cls2}"#;
 
         let lexed = lex(rx);
-        println!("{:?}, {:?}", rx, lexed);
 
         let mut v = lexed.iter();
         assert_eq!(

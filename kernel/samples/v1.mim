@@ -1,0 +1,48 @@
+use std::gen::uuid.v4 as uuid
+
+ingest csv "~/wordlists/names/german.csv" as [_, _, german_first_names, german_last_names, _]
+ingest csv "~/wordlists/cities/german.csv" as [german_cities]
+ingest csv "~/wordlists/words/german.csv" as [german_words]
+
+gen individual_name_shuffler [fnames] [lnames] ( 
+    rand fnames! . " " . rand lnames!
+) -> str
+
+gen pair_name_shuffler [fnames, lnames] (
+    asc (fnames . " " . lnames)!
+) -> str
+
+gen uuid_gen ( uuid! ) -> str
+
+// to make regex a bit more complex, zipcodes must start with non zero value
+gen zip_code ( regex "[1-9][0-9]{4}"! ) -> str
+
+gen gen_random_city ( rand german_city! ) -> str
+
+gen address (
+    regex "Street Mimiko, number ${rand_int!}, ${zip_code!} ${gen_random_city!}"
+) -> str
+
+gen random_word (
+    desc german_words!
+) -> str
+
+gen author_name (
+    pair_name_shuffler german_first_names german_last_names!
+) -> str
+
+object Library (
+    id uuid_gen!,
+    address address!
+    name regex "Random Lib no: ${me.id}"!
+    books [Book {me.id}]
+)
+
+object Book lib_id (
+    id uuid_gen!,
+    library_id lib_id,
+    author rand author_name!,
+    title regex "${random_word}{3,7}"
+)
+
+

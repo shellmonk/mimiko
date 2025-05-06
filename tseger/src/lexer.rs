@@ -46,6 +46,7 @@ pub enum WhitespaceKind {
     NewLine,
     Tab,
     CR,
+    Space,
 }
 
 #[derive(Debug)]
@@ -69,6 +70,10 @@ pub fn lex(rx: &str) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
             '+' => tokens.push((RegexAtom::QuantPlus, Position { start: i, end: i })),
             '^' => tokens.push((RegexAtom::Negation, Position { start: i, end: i })),
             '|' => tokens.push((RegexAtom::Or, Position { start: i, end: i })),
+            ' ' => tokens.push((
+                RegexAtom::Whitespace(WhitespaceKind::Space),
+                Position { start: i, end: i },
+            )),
             '\\' => match iter.next() {
                 None => {
                     return Err(TsegerError::LexerError(
@@ -113,7 +118,6 @@ pub fn lex(rx: &str) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
                             },
                         )),
                         'x' => tokens.push(lex_unicode(&mut iter)?),
-
                         'p' => tokens.push(lex_char_classes(&mut iter)?),
                         _ => todo!("This needs to be handled, unknown character after slash"),
                     }
@@ -178,6 +182,7 @@ where
 
     Ok((
         RegexAtom::Literal(
+            // TODO: These unwrap()s are unbearable
             char::from_u32(u32::from_str_radix(uchr.as_str(), 16).unwrap()).unwrap(),
         ),
         Position { start, end },
@@ -188,17 +193,78 @@ fn lex_unicode_range<I>(iter: &mut Peekable<I>) -> Result<(RegexAtom, Position),
 where
     I: Iterator<Item = (usize, char)>,
 {
-    let mut start = 0;
-    let mut end = 0;
+    let mut uchr = String::new();
 
-    let mut range = String::new();
+    let start;
+    let mut end;
 
-    while let Some((i, c)) = iter.next() {}
+    let start_range: char;
+    let end_range: char;
 
-    Ok((
-        RegexAtom::Range('\u{21A9}', '\u{21FF}'),
-        Position { start: 0, end: 0 },
-    ))
+    match iter.next() {
+        None => {
+            return Err(TsegerError::LexerError(format!(
+                "Unexpected end while parsing unicode range"
+            )));
+        }
+        Some((i, c)) => {
+            if c != '{' {
+                return Err(TsegerError::LexerError(format!(
+                    "Unexpected character '{}' at position {}",
+                    c, i
+                )));
+            }
+
+            start = i - 2;
+        }
+    }
+
+    while let Some((i, c)) = iter.next() {
+        end = i;
+
+        match c {
+            ',' => uchr.push(c),
+            c if c.is_ascii_hexdigit() => uchr.push(c),
+            '}' => {
+                if !uchr.contains(',') {
+                    return Err(TsegerError::LexerError(format!(
+                        "Invalid unicode range at {}",
+                        i
+                    )));
+                }
+
+                let split = uchr.split_once(',');
+
+                match split {
+                    None => {
+                        return Err(TsegerError::LexerError(format!(
+                            "Invalid unicode range at {}",
+                            i
+                        )));
+                    }
+                    Some((s1, s2)) => {
+                        // TODO: These unwrap() calls look ugly as hell
+                        start_range = char::from_u32(u32::from_str_radix(s1, 16).unwrap()).unwrap();
+                        end_range = char::from_u32(u32::from_str_radix(s2, 16).unwrap()).unwrap();
+
+                        return Ok((
+                            RegexAtom::Range(start_range, end_range),
+                            Position { start, end },
+                        ));
+                    }
+                }
+            }
+            _ => {
+                return Err(TsegerError::LexerError(format!(
+                    "Unexpected character '{}' at {}",
+                    c, i
+                )));
+            }
+        }
+    }
+
+    // TODO: What the hell is even this
+    Ok((RegexAtom::EOF, Position { start: 0, end: 0 }))
 }
 
 fn lex_char_classes<I>(iter: &mut Peekable<I>) -> Result<(RegexAtom, Position), TsegerError>
@@ -234,6 +300,8 @@ where
                 "Invalid end of the expression \\p is the last char"
             )));
         }
+
+        // TODO: This piece is screaming for refactoring
         Some((i, _)) => {
             start = i;
             while let Some(m) = iter.next() {
@@ -253,6 +321,69 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn whitespaces_test() {
+        let rx = r#"\t \n \r   \t"#;
+        let lexed = lex(rx).unwrap();
+        let mut v = lexed.iter();
+
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::Tab)
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::Space)
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::NewLine)
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::Space)
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::CR)
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::Space)
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::Space)
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::Space)
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::Tab)
+        );
+    }
+
+    #[test]
+    fn unicode_range_happy_path() {
+        let rx = r#"\x{21A9,21B0}\x{21B2,21B9}"#;
+
+        let lexed = lex(rx).unwrap();
+
+        let mut v = lexed.iter();
+
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Range('\u{21A9}', '\u{21B0}')
+        );
+
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Range('\u{21B2}', '\u{21B9}')
+        );
+    }
 
     #[test]
     fn unicode_char_happy_path() {

@@ -74,6 +74,9 @@ pub fn lex(rx: &str) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
                 RegexAtom::Whitespace(WhitespaceKind::Space),
                 Position { start: i, end: i },
             )),
+
+            // TODO: This doesn't look really safe
+            '[' => tokens.append(lex_ranges(&mut iter)?.as_mut()),
             '\\' => match iter.next() {
                 None => {
                     return Err(TsegerError::LexerError(
@@ -128,6 +131,23 @@ pub fn lex(rx: &str) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
     }
 
     Ok(tokens)
+}
+
+// TODO: This method signature hurts to watch, there's probably a way in Rust to make it a bit more
+// elegant
+fn lex_ranges<I>(iter: &mut Peekable<I>) -> Result<Vec<(RegexAtom, Position)>, TsegerError>
+where
+    I: Iterator<Item = (usize, char)>,
+{
+    let mut ranges = Vec::new();
+    let mut in_range = false;
+    while let Some((i, c)) = iter.next_if(|(_, c)| *c == ']') {
+        if in_range && c == '-' {}
+    }
+
+    _ = iter.next();
+
+    Ok(ranges)
 }
 
 fn lex_unicode<I>(iter: &mut Peekable<I>) -> Result<(RegexAtom, Position), TsegerError>

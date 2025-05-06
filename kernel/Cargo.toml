@@ -6,3 +6,5 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+clap = "4.5.37"
+logos = "0.15.0"

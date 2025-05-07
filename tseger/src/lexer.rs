@@ -39,6 +39,7 @@ pub enum RegexAtom {
     Whitespace(WhitespaceKind), // \t \r \n
     Negation,          // ^
     CharClass(String), // \p{digits}
+    Variable(String),
     EOF,
 }
 
@@ -97,10 +98,8 @@ pub fn lex(rx: &str) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
 
             '{' => tokens.push(lex_repetitions(&mut iter)?),
             // TODO: This doesn't look really safe
-            '[' => {
-                tokens.push(lex_bracket_expression(&mut iter)?);
-            }
-
+            '[' => tokens.push(lex_bracket_expression(&mut iter)?),
+            '#' => tokens.push(lex_variables(&mut iter)?),
             '\\' => match iter.next() {
                 None => {
                     return Err(TsegerError::LexerError(
@@ -111,7 +110,7 @@ pub fn lex(rx: &str) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
                     let fc = following.1;
                     match fc {
                         fc if vec![
-                            '(', ')', '{', '}', '[', ']', '.', '*', '?', '+', '^', '|', '\\',
+                            '(', ')', '{', '}', '[', ']', '.', '*', '?', '+', '^', '|', '\\', '#',
                         ]
                         .contains(&fc) =>
                         {
@@ -454,6 +453,57 @@ where
     Ok((RegexAtom::EOF, Position { start: 0, end: 0 }))
 }
 
+fn lex_variables<I>(iter: &mut Peekable<I>) -> Result<(RegexAtom, Position), TsegerError>
+where
+    I: Iterator<Item = (usize, char)>,
+{
+    // TODO: This looks like shit, improve early return
+    match iter.peek() {
+        None => {
+            return Err(TsegerError::LexerError(format!(
+                "Invalid end of the expression, \\p is the last char"
+            )));
+        }
+        Some((i, c)) => {
+            if *c != '{' {
+                return Err(TsegerError::LexerError(format!(
+                    "Invalid token '{}' after \\p at position: {}",
+                    c, i
+                )));
+            }
+        }
+    }
+
+    let n = iter.next();
+
+    let mut variable_name = String::new();
+    let start;
+    let mut end = 0;
+
+    match n {
+        None => {
+            return Err(TsegerError::LexerError(format!(
+                "Invalid end of the expression \\p is the last char"
+            )));
+        }
+
+        // TODO: This piece is screaming for refactoring
+        Some((i, _)) => {
+            start = i;
+            while let Some(m) = iter.next() {
+                if m.1 == '}' {
+                    end = m.0;
+                    return Ok((RegexAtom::Variable(variable_name), Position { start, end }));
+                } else {
+                    variable_name.push(m.1)
+                }
+            }
+        }
+    }
+
+    Ok((RegexAtom::Variable(variable_name), Position { start, end }))
+}
+
 fn lex_char_classes<I>(iter: &mut Peekable<I>) -> Result<(RegexAtom, Position), TsegerError>
 where
     I: Iterator<Item = (usize, char)>,
@@ -680,6 +730,17 @@ mod tests {
     }
 
     #[test]
+    fn variables_happy_path() {
+        let rx = r#"#{var1}#{var2}"#;
+
+        let lexed = lex(rx).unwrap();
+
+        let mut v = lexed.iter();
+        assert_eq!(v.next().unwrap().0, RegexAtom::Variable("var1".to_string()));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Variable("var2".to_string()));
+    }
+
+    #[test]
     fn char_classes_happy_path() {
         let rx = r#"\p{cls1}\p{cls2}"#;
 
@@ -689,6 +750,10 @@ mod tests {
         assert_eq!(
             v.next().unwrap().0,
             RegexAtom::CharClass("cls1".to_string())
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::CharClass("cls2".to_string())
         );
     }
 
@@ -707,7 +772,7 @@ mod tests {
 
     #[test]
     fn test_escape_characters() {
-        let rx = r#"\(\)\[\]\{\}\.\*\?\+\^\|\\\n\r\t"#;
+        let rx = r#"\(\)\[\]\{\}\.\*\?\+\^\|\\\#\n\r\t"#;
         let lexed = lex(rx).unwrap();
         let mut v = lexed.iter();
 
@@ -724,6 +789,7 @@ mod tests {
         assert_eq!(v.next().unwrap().0, RegexAtom::Literal('^'));
         assert_eq!(v.next().unwrap().0, RegexAtom::Literal('|'));
         assert_eq!(v.next().unwrap().0, RegexAtom::Literal('\\'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('#'));
         assert_eq!(
             v.next().unwrap().0,
             RegexAtom::Whitespace(WhitespaceKind::NewLine)

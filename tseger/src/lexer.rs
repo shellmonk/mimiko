@@ -20,25 +20,32 @@ use std::iter::Peekable;
 * - \p{digits}      character classes (TBD) (digits, emojis, uppercase_ascii, cyrilic, etc.)
 * - \xFFFF          Unicode scalar values support
 * - \x{FFF0,FFFF}   Unicode scalar value ranges
-* -
+* - #{names}        Variables
 */
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RegexAtom {
-    Literal(char),                        // ascii - abc123; unicode scalar values - \xFFFF
-    Range(char, char),                    // ascii - [a-zA-Z0-9]; unicode ranges - \x{FFF0,FFFF}
-    QuantWildcard,                        // . {1,1}
-    QuantOptional,                        // ? {0,1}
-    QuantKleene,                          // * {0,}
-    QuantPlus,                            // + {1,}
-    Or,                                   // | logical OR
-    LParen,                               // (
-    RParen,                               // )
+    Literal(char),     // ascii - abc123; unicode scalar values - \xFFFF
+    Range(char, char), // ascii - [a-zA-Z0-9]; unicode ranges - \x{FFF0,FFFF}
+    QuantWildcard,     // . {1,1}
+    QuantOptional,     // ? {0,1}
+    QuantKleene,       // * {0,}
+    QuantPlus,         // + {1,}
+    Or,                // | logical OR
+    LParen,            // (
+    RParen,            // )
+    BracketExpressions(Vec<BracketExpression>), // [abc-Z0-9123]
     Repetition(Option<u32>, Option<u32>), // {69,420}
-    Whitespace(WhitespaceKind),           // \t \r \n
-    Negation,                             // ^
-    CharClass(String),                    // \p{digits}
+    Whitespace(WhitespaceKind), // \t \r \n
+    Negation,          // ^
+    CharClass(String), // \p{digits}
     EOF,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum BracketExpression {
+    Single(RegexAtom, Position),
+    Ranged(RegexAtom, Position),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -49,7 +56,7 @@ pub enum WhitespaceKind {
     Space,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Position {
     start: usize,
     end: usize,
@@ -74,9 +81,26 @@ pub fn lex(rx: &str) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
                 RegexAtom::Whitespace(WhitespaceKind::Space),
                 Position { start: i, end: i },
             )),
+            '\n' => tokens.push((
+                RegexAtom::Whitespace(WhitespaceKind::NewLine),
+                Position { start: i, end: i },
+            )),
 
+            '\t' => tokens.push((
+                RegexAtom::Whitespace(WhitespaceKind::Tab),
+                Position { start: i, end: i },
+            )),
+            '\r' => tokens.push((
+                RegexAtom::Whitespace(WhitespaceKind::CR),
+                Position { start: i, end: i },
+            )),
+
+            '{' => tokens.push(lex_repetitions(&mut iter)?),
             // TODO: This doesn't look really safe
-            '[' => tokens.append(lex_ranges(&mut iter)?.as_mut()),
+            '[' => {
+                tokens.push(lex_bracket_expression(&mut iter)?);
+            }
+
             '\\' => match iter.next() {
                 None => {
                     return Err(TsegerError::LexerError(
@@ -126,6 +150,9 @@ pub fn lex(rx: &str) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
                     }
                 }
             },
+            c if c.is_alphanumeric() => {
+                tokens.push((RegexAtom::Literal(c), Position { start: i, end: i }))
+            }
             _ => todo!("Case {} at position {} not covered yet", c, i),
         }
     }
@@ -133,13 +160,91 @@ pub fn lex(rx: &str) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
     Ok(tokens)
 }
 
+fn lex_repetitions<I>(iter: &mut Peekable<I>) -> Result<(RegexAtom, Position), TsegerError>
+where
+    I: Iterator<Item = (usize, char)>,
+{
+    let mut start = 0 as usize;
+    let mut end = 0 as usize;
+
+    let mut start_str = String::new();
+    let mut end_str = String::new();
+
+    let mut first = true;
+
+    let start = match iter.peek() {
+        None => {
+            return Err(TsegerError::LexerError(format!(
+                "Unexpected end of sequence"
+            )));
+        }
+        Some((i, _)) => *i,
+    };
+
+    end = start;
+
+    while let Some((i, c)) = iter.next() {
+        end = i;
+        match c {
+            c if c.is_numeric() => {
+                if first {
+                    start_str.push(c)
+                } else {
+                    end_str.push(c)
+                }
+            }
+            ',' => first = false,
+            '}' => break,
+            _ => {
+                return Err(TsegerError::LexerError(format!(
+                    "Unexpected character '{}' at {}",
+                    c, i
+                )));
+            }
+        }
+    }
+
+    let start_range = match start_str.is_empty() {
+        true => Option::None,
+        false => Option::Some(match u32::from_str_radix(start_str.as_str(), 10) {
+            Ok(n) => n,
+            Err(_) => {
+                return Err(TsegerError::LexerError(format!(
+                    "Error while parsing repetition at {}",
+                    end
+                )));
+            }
+        }),
+    };
+
+    let end_range = match end_str.is_empty() {
+        true => Option::None,
+        false => Option::Some(match u32::from_str_radix(end_str.as_str(), 10) {
+            Ok(n) => n,
+            Err(_) => {
+                return Err(TsegerError::LexerError(format!(
+                    "Error while parsing repetition at {}",
+                    end
+                )));
+            }
+        }),
+    };
+
+    Ok((
+        RegexAtom::Repetition(start_range, end_range),
+        Position { start, end },
+    ))
+}
+
 // TODO: This method signature hurts to watch, there's probably a way in Rust to make it a bit more
 // elegant
-fn lex_ranges<I>(iter: &mut Peekable<I>) -> Result<Vec<(RegexAtom, Position)>, TsegerError>
+fn lex_bracket_expression<I>(iter: &mut Peekable<I>) -> Result<(RegexAtom, Position), TsegerError>
 where
     I: Iterator<Item = (usize, char)>,
 {
     let mut ranges = Vec::new();
+
+    // let mut expr = RegexAtom::BracketExpressions();
 
     let mut start = match iter.peek() {
         // TODO: This requires a nicer error message, with position and so on
@@ -174,12 +279,12 @@ where
 
             end = end + 1;
 
-            ranges.push((
+            ranges.push(BracketExpression::Ranged(
                 RegexAtom::Range(range_start, range_end),
                 Position { start, end },
             ));
         } else {
-            ranges.push((
+            ranges.push(BracketExpression::Single(
                 RegexAtom::Literal(c),
                 Position {
                     start: end,
@@ -206,7 +311,10 @@ where
         }
     }
 
-    Ok(ranges)
+    Ok((
+        RegexAtom::BracketExpressions(ranges),
+        Position { start, end },
+    ))
 }
 
 fn lex_unicode<I>(iter: &mut Peekable<I>) -> Result<(RegexAtom, Position), TsegerError>
@@ -402,26 +510,99 @@ mod tests {
     use super::*;
 
     #[test]
+    fn happy_complex_test_1() {
+        let rx = r#"ab{123,}|c*(^ab)\n\\\?.?\p{digits}\p{pokemons}\xBEEF[aab-cD-04-999]"#;
+        let lexed = lex(rx).unwrap();
+        let mut v = lexed.iter();
+
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('a'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('b'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Repetition(Some(123), None));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Or);
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('c'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::QuantKleene);
+        assert_eq!(v.next().unwrap().0, RegexAtom::LParen);
+        assert_eq!(v.next().unwrap().0, RegexAtom::Negation);
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('a'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('b'));
+
+        assert_eq!(v.next().unwrap().0, RegexAtom::RParen);
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::NewLine)
+        );
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('\\'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('?'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::QuantWildcard);
+        assert_eq!(v.next().unwrap().0, RegexAtom::QuantOptional);
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::CharClass("digits".to_string())
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::CharClass("pokemons".to_string())
+        );
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('\u{BEEF}'));
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::BracketExpressions(vec![
+                BracketExpression::Single(RegexAtom::Literal('a'), Position { start: 53, end: 53 }),
+                BracketExpression::Single(RegexAtom::Literal('a'), Position { start: 54, end: 54 }),
+                BracketExpression::Ranged(
+                    RegexAtom::Range('b', 'c'),
+                    Position { start: 55, end: 57 }
+                ),
+                BracketExpression::Ranged(
+                    RegexAtom::Range('D', '0'),
+                    Position { start: 58, end: 60 }
+                ),
+                BracketExpression::Ranged(
+                    RegexAtom::Range('4', '9'),
+                    Position { start: 61, end: 63 }
+                ),
+                BracketExpression::Single(RegexAtom::Literal('9'), Position { start: 64, end: 64 }),
+                BracketExpression::Single(RegexAtom::Literal('9'), Position { start: 65, end: 65 }),
+            ])
+        );
+    }
+
+    #[test]
     fn ascii_ranges_test() {
         let rx = r#"[aabba-zABC-Z01-9]"#;
         let lexed = lex(rx).unwrap();
         let mut v = lexed.iter();
 
-        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('a'));
-        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('a'));
-        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('b'));
-        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('b'));
-        assert_eq!(v.next().unwrap().0, RegexAtom::Range('a', 'z'));
-        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('A'));
-        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('B'));
-        assert_eq!(v.next().unwrap().0, RegexAtom::Range('C', 'Z'));
-        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('0'));
-        assert_eq!(v.next().unwrap().0, RegexAtom::Range('1', '9'));
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::BracketExpressions(vec![
+                BracketExpression::Single(RegexAtom::Literal('a'), Position { start: 1, end: 1 }),
+                BracketExpression::Single(RegexAtom::Literal('a'), Position { start: 2, end: 2 }),
+                BracketExpression::Single(RegexAtom::Literal('b'), Position { start: 3, end: 3 }),
+                BracketExpression::Single(RegexAtom::Literal('b'), Position { start: 4, end: 4 }),
+                BracketExpression::Ranged(
+                    RegexAtom::Range('a', 'z'),
+                    Position { start: 5, end: 7 }
+                ),
+                BracketExpression::Single(RegexAtom::Literal('A'), Position { start: 8, end: 8 }),
+                BracketExpression::Single(RegexAtom::Literal('B'), Position { start: 9, end: 9 }),
+                BracketExpression::Ranged(
+                    RegexAtom::Range('C', 'Z'),
+                    Position { start: 10, end: 12 }
+                ),
+                BracketExpression::Single(RegexAtom::Literal('0'), Position { start: 13, end: 13 }),
+                BracketExpression::Ranged(
+                    RegexAtom::Range('1', '9'),
+                    Position { start: 14, end: 16 }
+                ),
+            ])
+        );
     }
 
     #[test]
     fn whitespaces_test() {
-        let rx = r#"\t \n \r   \t"#;
+        let rx = r#"\t \n \r   \t
+        "#;
         let lexed = lex(rx).unwrap();
         let mut v = lexed.iter();
 
@@ -460,6 +641,10 @@ mod tests {
         assert_eq!(
             v.next().unwrap().0,
             RegexAtom::Whitespace(WhitespaceKind::Tab)
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::NewLine)
         );
     }
 

@@ -87,7 +87,7 @@ pub fn lex(rx: &str) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
                     let fc = following.1;
                     match fc {
                         fc if vec![
-                            '(', ')', '[', ']', '{', '}', '.', '*', '?', '+', '^', '|', '\\',
+                            '(', ')', '{', '}', '[', ']', '.', '*', '?', '+', '^', '|', '\\',
                         ]
                         .contains(&fc) =>
                         {
@@ -140,12 +140,71 @@ where
     I: Iterator<Item = (usize, char)>,
 {
     let mut ranges = Vec::new();
-    let mut in_range = false;
-    while let Some((i, c)) = iter.next_if(|(_, c)| *c == ']') {
-        if in_range && c == '-' {}
+
+    let mut start = match iter.peek() {
+        // TODO: This requires a nicer error message, with position and so on
+        None => return Err(TsegerError::LexerError(format!("Unexpected end of range"))),
+        Some((i, _)) => *i,
+    };
+
+    let mut end = start;
+
+    while let Some((i, c)) = iter.next_if(|(_, c)| *c != ']') {
+        start = i;
+        end = i;
+
+        // TODO: Refactor this, looks ugly
+        let next = iter.peek().unwrap();
+
+        if next.1 == '-' {
+            let range_start = c;
+
+            _ = iter.next();
+            end = end + 1;
+
+            let range_end = match iter.next() {
+                None => {
+                    return Err(TsegerError::LexerError(format!(
+                        "Unexpected end of range at {}",
+                        end
+                    )));
+                }
+                Some((_, local_end)) => local_end,
+            };
+
+            end = end + 1;
+
+            ranges.push((
+                RegexAtom::Range(range_start, range_end),
+                Position { start, end },
+            ));
+        } else {
+            ranges.push((
+                RegexAtom::Literal(c),
+                Position {
+                    start: end,
+                    end: end,
+                },
+            ));
+        }
     }
 
-    _ = iter.next();
+    match iter.next() {
+        None => {
+            return Err(TsegerError::LexerError(format!(
+                "Unexpected end of range at {}",
+                end
+            )));
+        }
+        Some((i, c)) => {
+            if c != ']' {
+                return Err(TsegerError::LexerError(format!(
+                    "Unexpected end of range at {}, missing ']'",
+                    i
+                )));
+            }
+        }
+    }
 
     Ok(ranges)
 }
@@ -341,6 +400,24 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ascii_ranges_test() {
+        let rx = r#"[aabba-zABC-Z01-9]"#;
+        let lexed = lex(rx).unwrap();
+        let mut v = lexed.iter();
+
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('a'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('a'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('b'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('b'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Range('a', 'z'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('A'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('B'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Range('C', 'Z'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Literal('0'));
+        assert_eq!(v.next().unwrap().0, RegexAtom::Range('1', '9'));
+    }
 
     #[test]
     fn whitespaces_test() {

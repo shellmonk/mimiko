@@ -1,18 +1,26 @@
-use std::gen::uuid.v4 as uuid
+use std::gen::uuid.v4 as uuid4
 
+// csv parser will parse everything by default, first two and the last columns
+// are ignored with _ operator
 ingest csv "~/wordlists/names/german.csv" as [_, _, german_first_names, german_last_names, _]
 ingest csv "~/wordlists/cities/german.csv" as [german_cities]
 ingest csv "~/wordlists/words/german.csv" as [german_words]
 
+// "fnames" and "lnames" are treated as separate lists
 gen individual_name_shuffler [fnames] [lnames] ( 
     rand fnames! . " " . rand lnames!
 ) -> str
 
+// here, "fnames" and "lnames" are treated as list of tuples
+// asc, desc and rand operators are part of the language and do lexicographic sorting, meaning
+// that every invocation (ending with "!" instead of ()) will yield one value, keeping internal
+// index incremented
 gen pair_name_shuffler [fnames, lnames] (
     asc (fnames . " " . lnames)!
 ) -> str
 
-gen uuid_gen ( uuid! ) -> str
+// uuid4! is invocation of the imported UUID v4 generator from the stdlib ("use std::gen::uuid.v4 as uuid")
+gen uuid_gen ( uuid4! ) -> str
 
 // to make regex a bit more complex, zipcodes must start with non zero value
 gen zip_code ( regex "[1-9][0-9]{4}"! ) -> str
@@ -20,7 +28,7 @@ gen zip_code ( regex "[1-9][0-9]{4}"! ) -> str
 gen gen_random_city ( rand german_city! ) -> str
 
 gen address (
-    regex "Street Mimiko, number ${rand_int!}, ${zip_code!} ${gen_random_city!}"
+    regex "Street Mimiko, number #{rand_int!}, #{zip_code!} #{gen_random_city!}"
 ) -> str
 
 gen random_word (
@@ -31,6 +39,8 @@ gen author_name (
     pair_name_shuffler german_first_names german_last_names!
 ) -> str
 
+
+// this is the meat of data definition part of the language, still WIP
 object Library (
     id uuid_gen!,
     address address!

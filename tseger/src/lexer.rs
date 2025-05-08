@@ -39,7 +39,7 @@ pub enum RegexAtom {
     Whitespace(WhitespaceKind), // \t \r \n
     Negation,          // ^
     CharClass(String), // \p{digits}
-    Variable(String),
+    Variable(String),  // #{var}
     EOF,
 }
 
@@ -561,7 +561,8 @@ mod tests {
 
     #[test]
     fn happy_complex_test_1() {
-        let rx = r#"ab{123,}|c*(^ab)\n\\\?.?\p{digits}\p{pokemons}\xBEEF[aab-cD-04-999]"#;
+        let rx = r#"ab{123,}|c*(^ab)\n\\\?.?\p{digits}\p{pokemons}\xBEEF[aab-cD-04-999]\x{D3AD,BEEF}#{var1} #{var2}\x{1EE7,C0DE}
+\p{testing}"#;
         let lexed = lex(rx).unwrap();
         let mut v = lexed.iter();
 
@@ -614,6 +615,28 @@ mod tests {
                 BracketExpression::Single(RegexAtom::Literal('9'), Position { start: 64, end: 64 }),
                 BracketExpression::Single(RegexAtom::Literal('9'), Position { start: 65, end: 65 }),
             ])
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Range('\u{D3AD}', '\u{BEEF}'),
+        );
+        assert_eq!(v.next().unwrap().0, RegexAtom::Variable("var1".to_string()));
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::Space)
+        );
+        assert_eq!(v.next().unwrap().0, RegexAtom::Variable("var2".to_string()));
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Range('\u{1EE7}', '\u{C0DE}')
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::Whitespace(WhitespaceKind::NewLine),
+        );
+        assert_eq!(
+            v.next().unwrap().0,
+            RegexAtom::CharClass("testing".to_string())
         );
     }
 

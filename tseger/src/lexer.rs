@@ -23,7 +23,7 @@ use std::iter::Peekable;
 * - #{names}        Variables
 */
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum RegexAtom {
     Literal(char),     // ascii - abc123; unicode scalar values - \xFFFF
     Range(char, char), // ascii - [a-zA-Z0-9]; unicode ranges - \x{FFF0,FFFF}
@@ -43,13 +43,15 @@ pub enum RegexAtom {
     EOF,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+pub type PositionedAtom = (RegexAtom, Position);
+
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum BracketExpression {
-    Single(RegexAtom, Position),
-    Ranged(RegexAtom, Position),
+    Single(PositionedAtom),
+    Ranged(PositionedAtom),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum WhitespaceKind {
     NewLine,
     Tab,
@@ -57,7 +59,7 @@ pub enum WhitespaceKind {
     Space,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Position {
     start: usize,
     end: usize,
@@ -72,7 +74,7 @@ impl<'a> Lexer<'a> {
         Self { rx: regex }
     }
 
-    pub fn lex(&self) -> Result<Vec<(RegexAtom, Position)>, TsegerError> {
+    pub fn lex(&self) -> Result<Vec<PositionedAtom>, TsegerError> {
         let mut tokens = Vec::new();
 
         let mut iter = self.rx.chars().enumerate().into_iter().peekable();
@@ -169,10 +171,7 @@ impl<'a> Lexer<'a> {
         Ok(tokens)
     }
 
-    fn lex_repetitions<I>(
-        &self,
-        iter: &mut Peekable<I>,
-    ) -> Result<(RegexAtom, Position), TsegerError>
+    fn lex_repetitions<I>(&self, iter: &mut Peekable<I>) -> Result<PositionedAtom, TsegerError>
     where
         I: Iterator<Item = (usize, char)>,
     {
@@ -252,7 +251,7 @@ impl<'a> Lexer<'a> {
     fn lex_bracket_expression<I>(
         &self,
         iter: &mut Peekable<I>,
-    ) -> Result<(RegexAtom, Position), TsegerError>
+    ) -> Result<PositionedAtom, TsegerError>
     where
         I: Iterator<Item = (usize, char)>,
     {
@@ -291,18 +290,18 @@ impl<'a> Lexer<'a> {
 
                 end = end + 1;
 
-                ranges.push(BracketExpression::Ranged(
+                ranges.push(BracketExpression::Ranged((
                     RegexAtom::Range(range_start, range_end),
                     Position { start, end },
-                ));
+                )));
             } else {
-                ranges.push(BracketExpression::Single(
+                ranges.push(BracketExpression::Single((
                     RegexAtom::Literal(c),
                     Position {
                         start: end,
                         end: end,
                     },
-                ));
+                )));
             }
         }
 
@@ -329,7 +328,7 @@ impl<'a> Lexer<'a> {
         ))
     }
 
-    fn lex_unicode<I>(&self, iter: &mut Peekable<I>) -> Result<(RegexAtom, Position), TsegerError>
+    fn lex_unicode<I>(&self, iter: &mut Peekable<I>) -> Result<PositionedAtom, TsegerError>
     where
         I: Iterator<Item = (usize, char)>,
     {
@@ -357,10 +356,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn lex_unicode_char<I>(
-        &self,
-        iter: &mut Peekable<I>,
-    ) -> Result<(RegexAtom, Position), TsegerError>
+    fn lex_unicode_char<I>(&self, iter: &mut Peekable<I>) -> Result<PositionedAtom, TsegerError>
     where
         I: Iterator<Item = (usize, char)>,
     {
@@ -391,10 +387,7 @@ impl<'a> Lexer<'a> {
         ))
     }
 
-    fn lex_unicode_range<I>(
-        &self,
-        iter: &mut Peekable<I>,
-    ) -> Result<(RegexAtom, Position), TsegerError>
+    fn lex_unicode_range<I>(&self, iter: &mut Peekable<I>) -> Result<PositionedAtom, TsegerError>
     where
         I: Iterator<Item = (usize, char)>,
     {
@@ -474,7 +467,7 @@ impl<'a> Lexer<'a> {
         Ok((RegexAtom::EOF, Position { start: 0, end: 0 }))
     }
 
-    fn lex_variables<I>(&self, iter: &mut Peekable<I>) -> Result<(RegexAtom, Position), TsegerError>
+    fn lex_variables<I>(&self, iter: &mut Peekable<I>) -> Result<PositionedAtom, TsegerError>
     where
         I: Iterator<Item = (usize, char)>,
     {
@@ -525,10 +518,7 @@ impl<'a> Lexer<'a> {
         Ok((RegexAtom::Variable(variable_name), Position { start, end }))
     }
 
-    fn lex_char_classes<I>(
-        &self,
-        iter: &mut Peekable<I>,
-    ) -> Result<(RegexAtom, Position), TsegerError>
+    fn lex_char_classes<I>(&self, iter: &mut Peekable<I>) -> Result<PositionedAtom, TsegerError>
     where
         I: Iterator<Item = (usize, char)>,
     {
@@ -624,22 +614,34 @@ mod tests {
         assert_eq!(
             v.next().unwrap().0,
             RegexAtom::BracketExpressions(vec![
-                BracketExpression::Single(RegexAtom::Literal('a'), Position { start: 53, end: 53 }),
-                BracketExpression::Single(RegexAtom::Literal('a'), Position { start: 54, end: 54 }),
-                BracketExpression::Ranged(
+                BracketExpression::Single((
+                    RegexAtom::Literal('a'),
+                    Position { start: 53, end: 53 }
+                )),
+                BracketExpression::Single((
+                    RegexAtom::Literal('a'),
+                    Position { start: 54, end: 54 }
+                )),
+                BracketExpression::Ranged((
                     RegexAtom::Range('b', 'c'),
                     Position { start: 55, end: 57 }
-                ),
-                BracketExpression::Ranged(
+                )),
+                BracketExpression::Ranged((
                     RegexAtom::Range('D', '0'),
                     Position { start: 58, end: 60 }
-                ),
-                BracketExpression::Ranged(
+                )),
+                BracketExpression::Ranged((
                     RegexAtom::Range('4', '9'),
                     Position { start: 61, end: 63 }
-                ),
-                BracketExpression::Single(RegexAtom::Literal('9'), Position { start: 64, end: 64 }),
-                BracketExpression::Single(RegexAtom::Literal('9'), Position { start: 65, end: 65 }),
+                )),
+                BracketExpression::Single((
+                    RegexAtom::Literal('9'),
+                    Position { start: 64, end: 64 }
+                )),
+                BracketExpression::Single((
+                    RegexAtom::Literal('9'),
+                    Position { start: 65, end: 65 }
+                )),
             ])
         );
         assert_eq!(
@@ -676,25 +678,28 @@ mod tests {
         assert_eq!(
             v.next().unwrap().0,
             RegexAtom::BracketExpressions(vec![
-                BracketExpression::Single(RegexAtom::Literal('a'), Position { start: 1, end: 1 }),
-                BracketExpression::Single(RegexAtom::Literal('a'), Position { start: 2, end: 2 }),
-                BracketExpression::Single(RegexAtom::Literal('b'), Position { start: 3, end: 3 }),
-                BracketExpression::Single(RegexAtom::Literal('b'), Position { start: 4, end: 4 }),
-                BracketExpression::Ranged(
+                BracketExpression::Single((RegexAtom::Literal('a'), Position { start: 1, end: 1 })),
+                BracketExpression::Single((RegexAtom::Literal('a'), Position { start: 2, end: 2 })),
+                BracketExpression::Single((RegexAtom::Literal('b'), Position { start: 3, end: 3 })),
+                BracketExpression::Single((RegexAtom::Literal('b'), Position { start: 4, end: 4 })),
+                BracketExpression::Ranged((
                     RegexAtom::Range('a', 'z'),
                     Position { start: 5, end: 7 }
-                ),
-                BracketExpression::Single(RegexAtom::Literal('A'), Position { start: 8, end: 8 }),
-                BracketExpression::Single(RegexAtom::Literal('B'), Position { start: 9, end: 9 }),
-                BracketExpression::Ranged(
+                )),
+                BracketExpression::Single((RegexAtom::Literal('A'), Position { start: 8, end: 8 })),
+                BracketExpression::Single((RegexAtom::Literal('B'), Position { start: 9, end: 9 })),
+                BracketExpression::Ranged((
                     RegexAtom::Range('C', 'Z'),
                     Position { start: 10, end: 12 }
-                ),
-                BracketExpression::Single(RegexAtom::Literal('0'), Position { start: 13, end: 13 }),
-                BracketExpression::Ranged(
+                )),
+                BracketExpression::Single((
+                    RegexAtom::Literal('0'),
+                    Position { start: 13, end: 13 }
+                )),
+                BracketExpression::Ranged((
                     RegexAtom::Range('1', '9'),
                     Position { start: 14, end: 16 }
-                ),
+                )),
             ])
         );
     }

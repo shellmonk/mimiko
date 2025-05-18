@@ -2,9 +2,10 @@ use std::gen::uuid.v4 as uuid4
 
 // csv parser will parse everything by default, first two and the last columns
 // are ignored with _ operator
-ingest csv "~/wordlists/names/german.csv" as [_, _, german_first_names, german_last_names, _]
-ingest csv "~/wordlists/cities/german.csv" as [german_cities]
-ingest csv "~/wordlists/words/german.csv" as [german_words]
+ingest file csv "~/wordlists/names/german.csv" as [_, _, german_first_names, german_last_names, _]
+ingest file csv "~/wordlists/cities/german.csv" as [german_cities]
+ingest file csv "~/wordlists/words/german.csv" as [german_words]
+ingest url txt "https://wordlist.com/cars/german.txt" as [german_cars]
 
 // "fnames" and "lnames" are treated as separate lists
 gen individual_name_shuffler [fnames] [lnames] ( 
@@ -41,18 +42,19 @@ gen author_name (
 
 
 // this is the meat of data definition part of the language, still WIP
-object Library (
+type Library (
     id uuid_gen!,
     address address!
-    name regex "Random Lib no: ${me.id}"!
-    books [Book {me.id}]
+    name regex "Random Lib no: ${self.id}"!
+    books [Book self.id]
 )
 
-object Book lib_id (
+type Book lib_id (
     id uuid_gen!,
-    library_id lib_id,
+    library_id ext.lib_id,
     author rand author_name!,
     title regex "${random_word}{3,7}"
 )
 
+dump Library [5] ( Book [10] ) |> json |> 1
 

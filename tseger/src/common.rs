@@ -6,6 +6,6 @@ pub enum TsegerError {
     LexerError(String),
     #[error("TSEGER | Parser error: {0}")]
     ParserError(String),
-    #[error("TSEGER | NFA error: {0}")]
-    NFAError(String),
+    #[error("TSEGER | DFA error: {0}")]
+    DFAError(String),
 }

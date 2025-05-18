@@ -1,4 +1,4 @@
 pub mod common;
-mod lexer;
-pub mod nfa;
-mod parser;
+pub mod lexer;
+pub mod parser;
+pub mod sm;

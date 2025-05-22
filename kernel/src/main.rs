@@ -1,16 +1,21 @@
 mod cli;
+mod common;
 mod lexer;
 mod parser;
 
 use std::fs;
 
 use logos::Logos;
+use parser::Parser;
 
-fn main() {
-    let src = fs::read_to_string("../docs/syntax-sketches/v1.mim").expect("shit happens");
+fn main() -> Result<(), ()> {
+    let src = fs::read_to_string("docs/syntax-sketches/v1.mim").expect("shit happens");
     let mut lex = lexer::Token::lexer(src.as_str());
+    let parser = Parser {};
 
-    while let Some(t) = lex.next() {
-        println!("LEX: {:?}", t);
-    }
+    let program = parser.parse(&mut lex);
+
+    //program.eval();
+
+    Ok(())
 }

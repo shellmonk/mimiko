@@ -1,4 +1,6 @@
 use std::gen::uuid.v4 as uuid4
+use std::io::fd
+
 
 // csv parser will parse everything by default, first two and the last columns
 // are ignored with _ operator
@@ -26,7 +28,7 @@ gen uuid_gen ( uuid4! ) -> str
 // to make regex a bit more complex, zipcodes must start with non zero value
 gen zip_code ( regex "[1-9][0-9]{4}"! ) -> str
 
-gen gen_random_city ( rand german_city! ) -> str
+gen gen_random_city ( rand german_cities! ) -> str
 
 gen address (
     regex "Street Mimiko, number #{rand_int!}, #{zip_code!} #{gen_random_city!}"
@@ -56,5 +58,5 @@ type Book lib_id (
     title regex "${random_word}{3,7}"
 )
 
-dump Library [5] ( Book [10] ) |> json |> 1
+dump Library [5] ( Book [10] ) |> io::out::json |> fd 1
 

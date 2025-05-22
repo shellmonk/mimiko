@@ -1,6 +1,10 @@
 use std::gen::uuid.v4 as uuid4
 use std::io::fd
 use std::format::json
+use std::io::file
+use std::io::url
+use std::format::csv
+use std::format::txt
 
 // csv parser will parse everything by default, first two and the last columns
 // are ignored with _ operator
@@ -59,5 +63,5 @@ type Book lib_id (
     title regex "${random_word}{3,7}"
 )
 
-dump Library l ( Book b l.id [10] ) [5] |> io::format::json |> fd 1
+dump Library l ( Book b l.id [10] ) [5] |> json |> fd 1
 

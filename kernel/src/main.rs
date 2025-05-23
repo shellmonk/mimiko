@@ -1,3 +1,4 @@
+mod ast;
 mod cli;
 mod common;
 mod lexer;
@@ -13,8 +14,9 @@ fn main() -> Result<(), ()> {
     let mut lex = lexer::Token::lexer(src.as_str());
     let parser = Parser {};
 
-    let program = parser.parse(&mut lex);
+    let program = parser.parse(&mut lex).map_err(|e| eprintln!("{e:?}"));
 
+    println!("{program:?}");
     //program.eval();
 
     Ok(())

@@ -4,7 +4,7 @@ use logos::Logos;
 #[logos(skip r"[ \t\n\r\f]+")]
 #[logos(skip r"//.*")]
 pub enum Token {
-    #[regex("[a-zA-Z_-][a-zA-Z0-9_-]{1,}", mimiko_identifier, priority = 3)]
+    #[regex("[a-zA-Z_-][a-zA-Z0-9_-]+", mimiko_identifier, priority = 3)]
     Identifier(String),
     #[regex(r#""[^"]*""#, mimiko_string, priority = 1)]
     String(String),
@@ -29,6 +29,8 @@ pub enum Token {
     Exec,
     #[token("_")]
     Underscore,
+    #[token(";")]
+    EndStmt,
 
     #[token("->")]
     Return,

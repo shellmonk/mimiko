@@ -1,22 +1,22 @@
-use std::gen::uuid.v4 as uuid4
-use std::io::fd
-use std::format::json
-use std::io::file
-use std::io::url
-use std::format::csv
-use std::format::txt
+use std::generators::uuid::v4 as uuid4;
+use std::io::fd;
+use std::format::json;
+use std::io::file;
+use std::io::url;
+use std::format::csv;
+use std::format::txt;
 
 // csv parser will parse everything by default, first two and the last columns
 // are ignored with _ operator
-ingest file csv "~/wordlists/names/german.csv" as [_, _, german_first_names, german_last_names, _]
-ingest file csv "~/wordlists/cities/german.csv" as [german_cities]
-ingest file csv "~/wordlists/words/german.csv" as [german_words]
-ingest url txt "https://wordlist.com/cars/german.txt" as [german_cars]
+ingest file csv "~/wordlists/names/german.csv" as [_, _, german_first_names, german_last_names, _];
+ingest file csv "~/wordlists/cities/german.csv" as [german_cities];
+ingest file csv "~/wordlists/words/german.csv" as [german_words];
+ingest url txt "https://wordlist.com/cars/german.txt" as [german_cars];
 
 // "fnames" and "lnames" are treated as separate lists
 gen individual_name_shuffler [fnames] [lnames] ( 
     rand fnames! . " " . rand lnames!
-) -> str
+) -> str;
 
 // here, "fnames" and "lnames" are treated as list of tuples
 // asc, desc and rand operators are part of the language and do lexicographic sorting, meaning
@@ -24,44 +24,44 @@ gen individual_name_shuffler [fnames] [lnames] (
 // index incremented
 gen pair_name_shuffler [fnames, lnames] (
     asc (fnames . " " . lnames)!
-) -> str
+) -> str;
 
 // uuid4! is invocation of the imported UUID v4 generator from the stdlib ("use std::gen::uuid.v4 as uuid")
-gen uuid_gen ( uuid4! ) -> str
+gen uuid_gen ( uuid4! ) -> str;
 
 // to make regex a bit more complex, zipcodes must start with non zero value
-gen zip_code ( regex "[1-9][0-9]{4}"! ) -> str
+gen zip_code ( regex "[1-9][0-9]{4}"! ) -> str;
 
 // return type is "str" unless stated otherwise
-gen gen_random_city ( rand german_cities! )
+gen gen_random_city ( rand german_cities! );
 
 gen address (
     regex "Street Mimiko, number #{rand_int!}, #{zip_code!} #{gen_random_city!}"
-) -> str
+) -> str;
 
 gen random_word (
     desc german_words!
-) -> str
+) -> str;
 
 gen author_name (
     pair_name_shuffler german_first_names german_last_names!
-) -> str
+) -> str;
 
 
 // this is the meat of data definition part of the language, still WIP
 type Library (
     id uuid_gen!,
     address address!
-    name regex "Random Lib no: ${self.id}"!
-    books [Book self.id]
-)
+    name regex "Random Lib no: ${self::id}"!
+    books [Book self::id]
+);
 
 type Book lib_id (
     id uuid_gen!,
-    library_id ext.lib_id,
+    library_id ext::lib_id,
     author rand author_name!,
     title regex "${random_word}{3,7}"
-)
+);
 
-dump Library l ( Book b l.id [10] ) [5] |> json |> fd 1
+dump Library lib ( Book book lib::id [10] ) [5] |> json |> fd 1;
 

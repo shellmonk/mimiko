@@ -3,7 +3,7 @@
 ### ToDo
 
 - [ ] tseger - string generator from regex
-    - [ ] regex lexer
+    - [x] regex lexer
     - [ ] regex parser
     - [ ] AST -> NFA Thompson's construction
     - [ ] error handling
@@ -12,8 +12,8 @@
     - [ ] stdlib
 
 - [ ] kernel - core of the language
-    - [ ] Mimiko syntax
-    - [ ] Mimiko lexer
+    - [x] Mimiko syntax
+    - [x] Mimiko lexer
     - [ ] Mimiko parser
     - [ ] Mimiko compiler
     - [ ] I/O

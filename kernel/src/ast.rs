@@ -5,6 +5,7 @@ pub struct ProgramAST {
 
 #[derive(Debug)]
 pub enum StmtDecl {
+    IncludeStmtDecl(IncludeStmt),
     LoadStmtDecl(LoadStmt),
     IngestStmtDecl(IngestStmt),
     GenStmtDecl(GenStmt),
@@ -15,6 +16,11 @@ pub enum StmtDecl {
 
 #[derive(Debug)]
 pub struct LoadStmt {
+    pub module: ModuleDef,
+}
+
+#[derive(Debug)]
+pub struct IncludeStmt {
     pub module: ModuleDef,
 }
 

@@ -1,15 +1,21 @@
-load mim::std::generators::uuid::v4 as uuid4;
-load bin::io::fd;
-load bin::io::file;
-load bin::io::url;
-load bin::format::json;
-load bin::format::csv;
-load bin::format::txt;
+// Mimiko generators are included
+include std::generators::uuid::v4 as uuid4;
 
-static (
+// binary plugins and functions are loaded
+load io::fd;
+load io::file;
+load io::url;
+load format::json;
+load format::csv;
+load format::txt;
+
+
+// static block containing module specific stuff
+// useful for metadata, global variables, constants, etc
+static {
     version "0.0.1",
     module_name "German authors library example"
-);
+};
 
 
 // csv parser will parse everything by default, first two and the last columns
@@ -53,7 +59,7 @@ gen zip_code ( regex "[1-9][0-9]{4}"! ) -> str;
 gen gen_random_city ( rand german_cities! );
 
 gen address (
-    regex "Street Mimiko, number #{rand_int!}, #{zip_code!} #{gen_random_city!}"
+    regex "Street Mimiko, number #{rand_int}, #{zip_code} #{gen_random_city}"!
 ) -> str;
 
 gen random_word (
@@ -92,13 +98,13 @@ type Author (
 	// the author. If we want to start over for every containing
 	// type, Book in this case, we'd declare this as var instead
 	// of global
-	global i:int = 1,
-	var addr:str = "Some dummy address for the author"
+	global i:int 1,
+	var addr:str "Some dummy address for the author"
     },
     // making sure id is updated after every generation. A way to update
     // "invisible" state of the type is needed, this looks ugly a bit
     // TODO: Find better syntax
-    id inc self::i! { self::i = self::id },
+    id inc self::i! { self::i self::id },
     address self::addr,
     name author_name!
 );

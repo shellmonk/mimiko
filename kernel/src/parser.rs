@@ -18,6 +18,7 @@ impl Parser {
         while let Some(Ok(token)) = lexer.next() {
             match token {
                 Token::Load => statements.push(self.parse_load_statement(lexer)?),
+                Token::Include => statements.push(self.parse_include_statement(lexer)?),
                 Token::Ingest => statements.push(self.parse_ingest_statement(lexer)?),
                 Token::Gen => statements.push(self.parse_generator_statement(lexer)?),
                 Token::TypeObj => statements.push(self.parse_type_statement(lexer)?),
@@ -51,6 +52,67 @@ impl Parser {
         }
 
         Ok(StmtDecl::StaticStmtDecl(StaticStmt {}))
+    }
+
+    fn parse_include_statement(&self, lexer: &mut Lexer<Token>) -> ParserResult<StmtDecl> {
+        let mut namespaces: Vec<String> = Vec::new();
+        let mut alias: Option<String> = None;
+
+        let mut piter = lexer.peekable();
+        let mut parsing_alias = false;
+
+        while let Some(Ok(tok)) = piter.next() {
+            if tok == Token::EndStmt && !namespaces.is_empty() {
+                return Ok(StmtDecl::IncludeStmtDecl(IncludeStmt {
+                    module: ModuleDef { namespaces, alias },
+                }));
+            }
+
+            match tok {
+                Token::As => parsing_alias = true,
+                Token::Identifier(id) => {
+                    if parsing_alias {
+                        alias = Some(id)
+                    } else {
+                        namespaces.push(id)
+                    }
+                }
+                Token::ScopeResolutionOp => {
+                    if namespaces.is_empty() {
+                        return Err(MimikoError::ParserUnexpectedToken {
+                            range: lexer.span(),
+                            token: lexer.slice().to_owned(),
+                        });
+                    }
+
+                    match piter.peek() {
+                        None => {
+                            return Err(MimikoError::ParserUnexpectedEndSequence {
+                                range: lexer.span(),
+                            });
+                        }
+                        Some(Ok(t)) => {
+                            if !matches!(Token::Identifier, t) {
+                                return Err(MimikoError::ParserUnexpectedEndSequence {
+                                    range: lexer.span(),
+                                });
+                            }
+                        }
+                        _ => todo!("This case is weird, investigate and do proper error handling"),
+                    }
+                }
+                _ => {
+                    return Err(MimikoError::ParserUnexpectedToken {
+                        range: lexer.span(),
+                        token: lexer.slice().to_owned(),
+                    });
+                }
+            }
+        }
+
+        Ok(StmtDecl::IncludeStmtDecl(IncludeStmt {
+            module: ModuleDef { namespaces, alias },
+        }))
     }
 
     fn parse_load_statement(&self, lexer: &mut Lexer<Token>) -> ParserResult<StmtDecl> {

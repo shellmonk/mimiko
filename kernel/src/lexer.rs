@@ -77,6 +77,8 @@ pub enum Token {
     Var,
     #[token("global")]
     Global,
+    #[token("include")]
+    Include,
     #[token("load")]
     Load,
     #[token("as")]

@@ -14,13 +14,13 @@ static (
 
 // csv parser will parse everything by default, first two and the last columns
 // are ignored with _ operator
-ingest file csv { skip_rows: 1 }
+ingest file csv { skip_rows 1 }
     "~/wordlists/names/german.csv" as 
     [_, _, german_first_names, german_last_names, _];
-ingest file csv { skip_rows: 1 }
+ingest file csv { skip_rows 1 }
     "~/wordlists/cities/german.csv" as 
     [german_cities];
-ingest file csv { skip_rows: 1, load_rows: 10 }
+ingest file csv { skip_rows 1, load_rows 10 }
     "~/wordlists/words/german.csv" as 
     [german_words];
 ingest url txt 

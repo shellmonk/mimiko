@@ -1,19 +1,28 @@
-use std::generators::uuid::v4 as uuid4;
-use std::io::fd;
-use std::format::json;
-use std::io::file;
-use std::io::url;
-use std::format::csv;
-use std::format::txt;
+load mim::std::generators::uuid::v4 as uuid4;
+load bin::io::fd;
+load bin::io::file;
+load bin::io::url;
+load bin::format::json;
+load bin::format::csv;
+load bin::format::txt;
 
 // csv parser will parse everything by default, first two and the last columns
 // are ignored with _ operator
-ingest file csv "~/wordlists/names/german.csv" as [_, _, german_first_names, german_last_names, _];
-ingest file csv "~/wordlists/cities/german.csv" as [german_cities];
-ingest file csv "~/wordlists/words/german.csv" as [german_words];
-ingest url txt "https://wordlist.com/cars/german.txt" as [german_cars];
+ingest file csv 
+    "~/wordlists/names/german.csv" as 
+    [_, _, german_first_names, german_last_names, _];
+ingest file csv 
+    "~/wordlists/cities/german.csv" as 
+    [german_cities];
+ingest file csv 
+    "~/wordlists/words/german.csv" as 
+    [german_words];
+ingest url txt 
+    "https://wordlist.com/cars/german.txt" as 
+    [german_cars];
 
 // "fnames" and "lnames" are treated as separate lists
+// dot is representing concatenation
 gen individual_name_shuffler [fnames] [lnames] ( 
     rand fnames! . " " . rand lnames!
 ) -> str;
@@ -26,7 +35,8 @@ gen pair_name_shuffler [fnames, lnames] (
     asc (fnames . " " . lnames)!
 ) -> str;
 
-// uuid4! is invocation of the imported UUID v4 generator from the stdlib ("use std::gen::uuid.v4 as uuid")
+// uuid4! is invocation of the imported UUID v4 generator 
+// from the stdlib ("use std::gen::uuid.v4 as uuid")
 gen uuid_gen ( uuid4! ) -> str;
 
 // to make regex a bit more complex, zipcodes must start with non zero value
@@ -47,11 +57,14 @@ gen author_name (
     pair_name_shuffler german_first_names german_last_names!
 ) -> str;
 
+gen inc i:int (
+   i + 1
+) -> int;
 
 // this is the meat of data definition part of the language, still WIP
 type Library (
     id uuid_gen!,
-    address address!
+    address address! . ": address",
     name regex "Random Lib no: ${self::id}"!
     books [Book self::id]
 );
@@ -60,8 +73,29 @@ type Book lib_id (
     id uuid_gen!,
     library_id ext::lib_id,
     author rand author_name!,
-    title regex "${random_word}{3,7}"
+    title regex "${random_word}{3,7}",
+    author Author
 );
 
+type Author (
+    { 
+	// global var is set when type is first instantiated
+	// something like static class object in Java. This will
+	// update i every time id is generated for every instance of
+	// the author. If we want to start over for every containing
+	// type, Book in this case, we'd declare this as var instead
+	// of global
+	global i:int = 1;
+	var addr:str = "Some dummy address for the author";
+    },
+    // making sure id is updated after every generation. A way to update
+    // "invisible" state of the type is needed, this looks ugly a bit
+    // TODO: Find better syntax
+    id inc self::i! { self::i = self::id },
+    address self::addr,
+    name author_name!
+);
+
+// this should generate a json of 5 libraries with 10 books each
 dump Library lib ( Book book lib::id [10] ) [5] |> json |> fd 1;
 

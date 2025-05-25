@@ -1,10 +1,11 @@
 use logos::Logos;
 
 #[derive(Logos, Debug, PartialEq)]
+#[logos(extras = (usize, usize))]
 #[logos(skip r"[ \t\n\r\f]+")]
 #[logos(skip r"//.*")]
 pub enum Token {
-    #[regex("[a-zA-Z_-][a-zA-Z0-9_-]+", mimiko_identifier, priority = 3)]
+    #[regex(r#"[a-zA-Z][a-zA-Z0-9_-]*"#, mimiko_identifier, priority = 3)]
     Identifier(String),
     #[regex(r#""[^"]*""#, mimiko_string, priority = 1)]
     String(String),
@@ -21,6 +22,10 @@ pub enum Token {
     LtBracket,
     #[token("]")]
     RtBracket,
+    #[token("{")]
+    LBrace,
+    #[token("}")]
+    RBrace,
     #[token(",")]
     Comma,
     #[token(".")]
@@ -29,8 +34,21 @@ pub enum Token {
     Exec,
     #[token("_")]
     Underscore,
+    #[token(":")]
+    TypeDef,
     #[token(";")]
     EndStmt,
+
+    #[token("=")]
+    Assignment,
+    #[token("+")]
+    Addition,
+    #[token("-")]
+    Subtraction,
+    #[token("*")]
+    Multiplication,
+    #[token("/")]
+    Division,
 
     #[token("->")]
     Return,
@@ -45,9 +63,20 @@ pub enum Token {
     IntType,
     #[token("float")]
     FloatType,
+    #[token("bool")]
+    BoolType,
 
-    #[token("use")]
-    Use,
+    #[token("true")]
+    BoolValTrue,
+    #[token("false")]
+    BoolValFalse,
+
+    #[token("var")]
+    Var,
+    #[token("global")]
+    Global,
+    #[token("load")]
+    Load,
     #[token("as")]
     As,
     #[token("ingest")]
@@ -98,10 +127,10 @@ fn mimiko_float(lexer: &mut logos::Lexer<Token>) -> f64 {
 
 fn mimiko_string(lexer: &mut logos::Lexer<Token>) -> String {
     let slice = lexer.slice();
-    slice[1..slice.len() - 1].to_string()
+    slice[1..slice.len() - 1].to_owned()
 }
 
 fn mimiko_identifier(lexer: &mut logos::Lexer<Token>) -> String {
     let slice = lexer.slice();
-    slice.to_string()
+    slice.to_owned()
 }

@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use super::ast::*;
 use super::common::MimikoError;
 use super::lexer::Token;
@@ -12,16 +10,21 @@ type ParserResult<T> = Result<T, MimikoError>;
 
 impl Parser {
     pub fn parse(&self, lexer: &mut Lexer<Token>) -> ParserResult<ProgramAST> {
+        //while let Some(tok) = lexer.next() {
+        //    println!("TOK: {tok:?}");
+        //}
+
         let mut statements: Vec<StmtDecl> = Vec::new();
         while let Some(Ok(token)) = lexer.next() {
             match token {
-                Token::Use => statements.push(self.parse_use_statement(lexer)?),
+                Token::Load => statements.push(self.parse_load_statement(lexer)?),
                 Token::Ingest => statements.push(self.parse_ingest_statement(lexer)?),
                 Token::Gen => statements.push(self.parse_generator_statement(lexer)?),
                 Token::TypeObj => statements.push(self.parse_type_statement(lexer)?),
                 Token::Dump => statements.push(self.parse_dump_statement(lexer)?),
                 _ => {
                     return Err(MimikoError::ParserUnexpectedToken {
+                        token: lexer.slice().to_owned(),
                         range: lexer.span(),
                     });
                 }
@@ -31,7 +34,15 @@ impl Parser {
         Ok(ProgramAST { statements })
     }
 
-    fn parse_use_statement(&self, lexer: &mut Lexer<Token>) -> ParserResult<StmtDecl> {
+    fn skip_statement(&self, lexer: &mut Lexer<Token>) {
+        while let Some(Ok(tok)) = lexer.next() {
+            if tok == Token::EndStmt {
+                break;
+            }
+        }
+    }
+
+    fn parse_load_statement(&self, lexer: &mut Lexer<Token>) -> ParserResult<StmtDecl> {
         let mut namespaces: Vec<String> = Vec::new();
         let mut alias: Option<String> = None;
 
@@ -40,7 +51,7 @@ impl Parser {
 
         while let Some(Ok(tok)) = piter.next() {
             if tok == Token::EndStmt && !namespaces.is_empty() {
-                return Ok(StmtDecl::UseStmtDecl(UseStmt {
+                return Ok(StmtDecl::LoadStmtDecl(LoadStmt {
                     module: ModuleDef { namespaces, alias },
                 }));
             }
@@ -58,6 +69,7 @@ impl Parser {
                     if namespaces.is_empty() {
                         return Err(MimikoError::ParserUnexpectedToken {
                             range: lexer.span(),
+                            token: lexer.slice().to_owned(),
                         });
                     }
 
@@ -80,12 +92,13 @@ impl Parser {
                 _ => {
                     return Err(MimikoError::ParserUnexpectedToken {
                         range: lexer.span(),
+                        token: lexer.slice().to_owned(),
                     });
                 }
             }
         }
 
-        Ok(StmtDecl::UseStmtDecl(UseStmt {
+        Ok(StmtDecl::LoadStmtDecl(LoadStmt {
             module: ModuleDef { namespaces, alias },
         }))
     }
@@ -111,6 +124,9 @@ impl Parser {
 
     fn parse_type_statement(&self, lexer: &mut Lexer<Token>) -> ParserResult<StmtDecl> {
         while let Some(Ok(tok)) = lexer.next() {
+            if tok == Token::Var || tok == Token::Global {
+                self.skip_statement(lexer);
+            }
             if tok == Token::EndStmt {
                 break;
             }

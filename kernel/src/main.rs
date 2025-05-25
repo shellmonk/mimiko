@@ -14,9 +14,10 @@ fn main() -> Result<(), ()> {
     let mut lex = lexer::Token::lexer(src.as_str());
     let parser = Parser {};
 
-    let program = parser.parse(&mut lex).map_err(|e| eprintln!("{e:?}"));
-
-    println!("{program:?}");
+    match parser.parse(&mut lex) {
+        Ok(prog) => println!("{prog:?}"),
+        Err(e) => eprintln!("{}", e.to_string()),
+    }
     //program.eval();
 
     Ok(())

@@ -71,6 +71,8 @@ pub enum Token {
     #[token("false")]
     BoolValFalse,
 
+    #[token("static")]
+    Static,
     #[token("var")]
     Var,
     #[token("global")]

@@ -10,6 +10,7 @@ pub enum StmtDecl {
     GenStmtDecl(GenStmt),
     TypeStmtDecl(TypeStmt),
     DumpStmtDecl(DumpStmt),
+    StaticStmtDecl(StaticStmt),
 }
 
 #[derive(Debug)]
@@ -31,3 +32,5 @@ pub struct GenStmt {}
 pub struct TypeStmt {}
 #[derive(Debug)]
 pub struct DumpStmt {}
+#[derive(Debug)]
+pub struct StaticStmt {}

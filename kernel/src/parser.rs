@@ -22,6 +22,7 @@ impl Parser {
                 Token::Gen => statements.push(self.parse_generator_statement(lexer)?),
                 Token::TypeObj => statements.push(self.parse_type_statement(lexer)?),
                 Token::Dump => statements.push(self.parse_dump_statement(lexer)?),
+                Token::Static => statements.push(self.parse_static_statement(lexer)?),
                 _ => {
                     return Err(MimikoError::ParserUnexpectedToken {
                         token: lexer.slice().to_owned(),
@@ -40,6 +41,16 @@ impl Parser {
                 break;
             }
         }
+    }
+
+    fn parse_static_statement(&self, lexer: &mut Lexer<Token>) -> ParserResult<StmtDecl> {
+        while let Some(Ok(tok)) = lexer.next() {
+            if tok == Token::EndStmt {
+                break;
+            }
+        }
+
+        Ok(StmtDecl::StaticStmtDecl(StaticStmt {}))
     }
 
     fn parse_load_statement(&self, lexer: &mut Lexer<Token>) -> ParserResult<StmtDecl> {

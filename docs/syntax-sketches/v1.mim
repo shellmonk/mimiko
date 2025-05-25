@@ -6,20 +6,27 @@ load bin::format::json;
 load bin::format::csv;
 load bin::format::txt;
 
+static (
+    version "0.0.1",
+    module_name "German authors library example"
+);
+
+
 // csv parser will parse everything by default, first two and the last columns
 // are ignored with _ operator
-ingest file csv 
+ingest file csv { skip_rows: 1 }
     "~/wordlists/names/german.csv" as 
     [_, _, german_first_names, german_last_names, _];
-ingest file csv 
+ingest file csv { skip_rows: 1 }
     "~/wordlists/cities/german.csv" as 
     [german_cities];
-ingest file csv 
+ingest file csv { skip_rows: 1, load_rows: 10 }
     "~/wordlists/words/german.csv" as 
     [german_words];
 ingest url txt 
     "https://wordlist.com/cars/german.txt" as 
     [german_cars];
+
 
 // "fnames" and "lnames" are treated as separate lists
 // dot is representing concatenation
@@ -85,8 +92,8 @@ type Author (
 	// the author. If we want to start over for every containing
 	// type, Book in this case, we'd declare this as var instead
 	// of global
-	global i:int = 1;
-	var addr:str = "Some dummy address for the author";
+	global i:int = 1,
+	var addr:str = "Some dummy address for the author"
     },
     // making sure id is updated after every generation. A way to update
     // "invisible" state of the type is needed, this looks ugly a bit

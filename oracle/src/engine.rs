@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use rand::prelude::*;
 
 pub struct Oracle {
@@ -15,11 +17,15 @@ enum Token {
 
 struct Block {
     kind: BlockKind,
+    rng: RefCell<ThreadRng>,
 }
 
 impl Block {
     pub fn new(kind: BlockKind) -> Self {
-        Self { kind }
+        Self {
+            kind,
+            rng: RefCell::new(rand::rng()),
+        }
     }
 }
 
@@ -30,10 +36,11 @@ enum BlockKind {
 
 impl Emittable for Block {
     fn emit(&self) -> Option<Vec<char>> {
-        let mut rng = rand::rng();
         match self.kind {
             BlockKind::SingleCharBlock(c) => Some(vec![c]),
-            BlockKind::RangeBlock { from, to } => Some(vec![rng.random_range(from..to)]),
+            BlockKind::RangeBlock { from, to } => {
+                Some(vec![self.rng.borrow_mut().random_range(from..to)])
+            }
         }
     }
 }
@@ -41,7 +48,7 @@ impl Emittable for Block {
 impl Oracle {
     pub fn new(tokens: &Vec<Token>) -> Self {
         Self {
-            chain: tokens_2_blocks(tokens),
+            chain: build_chain(tokens),
         }
     }
 
@@ -56,7 +63,7 @@ impl Oracle {
     }
 }
 
-fn tokens_2_blocks(tokens: &Vec<Token>) -> Vec<Box<Block>> {
+fn build_chain(tokens: &Vec<Token>) -> Vec<Box<Block>> {
     tokens
         .iter()
         .map(|token| match *token {

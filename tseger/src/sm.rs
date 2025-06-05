@@ -111,18 +111,18 @@ mod tests {
 
         loop {
             let e = events.next();
-            println!("PROCESSING SYMBOL: {:?}", e);
+            //println!("PROCESSING SYMBOL: {:?}", e);
             if e == Option::None {
                 break;
             }
             if !sm.process(Symbol(e.unwrap())) {
-                println!("CURRENT STATE: {:?}", sm.current_state);
+                //println!("CURRENT STATE: {:?}", sm.current_state);
             } else {
-                println!("CURRENT STATE IS FINAL: {:?}", sm.current_state);
+                //println!("CURRENT STATE IS FINAL: {:?}", sm.current_state);
                 break;
             }
         }
-        println!("STATE MACHINE: {:?}", sm);
+        //println!("STATE MACHINE: {:?}", sm);
 
         assert_eq!("1", "1");
     }
